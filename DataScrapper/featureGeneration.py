@@ -1,12 +1,14 @@
 import numpy as np
 import talib
 from talib.abstract import *
+from sknn.mlp import Regressor, Layer
 data = np.genfromtxt('AAPL2.txt', delimiter=',')
 data = np.flipud(data);
 
 inputs = {'open' : data[:, 0], 'high': data[:, 1], 'low': data[:, 2], 'close': data[:, 3], 'volume': data[:, 4]}
 
-TodayCloseMinusPreviousClose = np.transpose([np.append([0], data[:5018, 3]) - data[:, 3]])
+TodayCloseMinusPreviousClose = np.transpose([data[:, 3] - np.append([0], data[:5018, 3])])
+TodayCloseMinusPreviousClose[0] = 0
 
 PreviousClosePrice = np.transpose([np.append([0], data[:5018, 3])])
 PreviousLowPrice = np.transpose([np.append([0], data[:5018, 2])])
@@ -67,11 +69,13 @@ WeightedClose = np.transpose([WCLPRICE(inputs)])
 maxHigh = np.array([])
 for i in range(0, 5019):
     maxHigh = np.append([maxHigh], [np.max(data[0:i + 1, 1])])
+
 maxHigh = np.transpose([maxHigh])
 
 minLow = np.array([])
 for i in range(0, 5019):
     minLow = np.append([minLow], [np.min(data[0:i + 1, 2])])
+
 minLow = np.transpose([minLow])
 
 result = np.concatenate((TodayCloseMinusPreviousClose, PreviousClosePrice, PreviousHighPrice, PreviousLowPrice,
@@ -82,7 +86,46 @@ result = np.concatenate((TodayCloseMinusPreviousClose, PreviousClosePrice, Previ
                         AbsolutePriceOscillator, macd_data, MomentumClosestPrice, MomentumHighestPrice,
                         MomentumLowestPrice, MomentumOpeningPrice, ChaikinVolatality, FastK, FastD, SlowK, SlowD, Wr,
                         RelativeStrengthIndex, UpperBBand, MiddleBBand, LowerBBand, priceRateOfChange, MedianPrice,
-                        TypicalPrice, WeightedClose, maxHigh, minLow), axis = 1)
+                        TypicalPrice, WeightedClose), axis = 1)
 
+result = np.concatenate((PreviousClosePrice, PreviousHighPrice, PreviousLowPrice, fiveDayEMAClosingPrices, SixDayEMAClosingPrices,
+                        TenDayEMAClosingPrices, TwentyDayEMAClosingPrices, fiveDayTRIMAClosingPrices, TenDayTRIMAClosingPrices,
+                        TwentyDayTRIMAClosingPrices, MomentumHighestPrice, MomentumOpeningPrice, FastD, SlowD,
+                        RelativeStrengthIndex, UpperBBand, MiddleBBand, LowerBBand, priceRateOfChange, MedianPrice
+                        ), axis = 1)
 #print(np.shape(result))
+
+# resultFlip = np.flipud(result)
+# resultFlip = resultFlip[0:4900, :]
+# resultFlip = np.flipud(resultFlip)
+#
+# dataFlip = np.flipud(data)
+# dataFlip = data[0:4900, :]
+# dataFlip = np.flipud(dataFlip)
+#
+# train_x = resultFlip[0:4800, :]
+# train_y = dataFlip[0:4800, 3]
+#
+# test_x = resultFlip[4801:4900, :]
+# test_y = dataFlip[4801:4900, 3]
+
+result2 = result[200:, :]
+data2 = data[300:, :]
+
+train_x = result2[0:4600, :]
+train_y = data2[0:4600, 3]
+
+test_x = result2[4601:4700, :]
+test_y = data2[4601:4700, 3]
+
+nn = Regressor(
+    layers=[
+        Layer("Rectifier", units=17),
+        Layer("Linear")],
+    learning_rule = "adagrad")
+
+f = nn.fit(train_x, train_y)
+ui = f.predict(test_x)
+np.mean(ui - np.transpose([test_y]))
+np.var(ui - np.transpose([test_y]))
 
